@@ -8,6 +8,7 @@ import (
 type LogLevel string
 
 const (
+	LOG_LEVEL_DEBUG LogLevel = "DEBUG"
 	LOG_LEVEL_INFO  LogLevel = "INFO"
 	LOG_LEVEL_ERROR LogLevel = "ERROR"
 	LOG_LEVEL_FATAL LogLevel = "FATAL"
