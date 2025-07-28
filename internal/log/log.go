@@ -1,7 +1,7 @@
-package main
+package log
 
 import (
-	ilog "log"
+	log "log"
 	"os"
 )
 
@@ -13,8 +13,8 @@ const (
 	LOG_LEVEL_FATAL LogLevel = "FATAL"
 )
 
-func log(level LogLevel, msg string) {
-	ilog.Printf("[%s] %s", level, msg)
+func Log(level LogLevel, msg string) {
+	log.Printf("[%s] %s", level, msg)
 
 	if level == LOG_LEVEL_FATAL {
 		os.Exit(1)

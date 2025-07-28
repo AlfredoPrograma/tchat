@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"sync"
+
+	"github.com/alfredoprograma/tchat/internal/log"
 )
 
 const BUFFER_SIZE = 512
@@ -21,7 +23,7 @@ func NewListener(addr *net.TCPAddr) *net.TCPListener {
 	listener, err := net.ListenTCP("tcp", addr)
 
 	if err != nil {
-		log(LOG_LEVEL_FATAL, fmt.Sprintf("cannot start listener at addr %s", addr))
+		log.Log(log.LOG_LEVEL_FATAL, fmt.Sprintf("cannot start listener at addr %s", addr))
 	}
 
 	return listener
@@ -32,7 +34,7 @@ func receiveConnections(listener *net.TCPListener, eventsCh chan Event) {
 		conn, err := listener.AcceptTCP()
 
 		if err != nil {
-			log(LOG_LEVEL_ERROR, fmt.Sprintf("cannot handle connection from %s", conn.RemoteAddr().String()))
+			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot handle connection from %s", conn.RemoteAddr().String()))
 			continue
 		}
 
@@ -46,14 +48,14 @@ func handleConnection(conn *net.TCPConn, eventsChan chan Event) {
 		_, err := conn.Read(buf)
 
 		if err != nil {
-			log(LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
+			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
 			continue
 		}
 
 		var incomingEvent Event
 
 		if err := json.Unmarshal(buf, &incomingEvent); err != nil {
-			log(LOG_LEVEL_ERROR, fmt.Sprintf("cannot parse json message from connection %s", conn.RemoteAddr().String()))
+			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot parse json message from connection %s", conn.RemoteAddr().String()))
 			continue
 		}
 
@@ -63,7 +65,7 @@ func handleConnection(conn *net.TCPConn, eventsChan chan Event) {
 
 func handleEvents(eventsCh chan Event) {
 	for event := range eventsCh {
-		log(LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
+		log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
 	}
 }
 
