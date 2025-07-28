@@ -49,7 +49,7 @@ func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 		readLen, err := conn.Read(buf)
 
 		if err != nil {
-			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
+			// log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
 			continue
 		}
 
@@ -64,24 +64,48 @@ func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 			continue
 		}
 
+		incomingEvent.Meta = events.EventMetadata{
+			Conn: conn,
+		}
+
 		eventsChan <- incomingEvent
 	}
 }
 
-func handleEvents(eventsCh chan events.Event) {
+func registerUser(username string, conn *net.TCPConn, chat *Chat) {
+	chat.mu.Lock()
+	chat.conns[username] = conn
+	chat.mu.Unlock()
+
+	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("user %s registered in chat room", username))
+}
+
+func handleEvents(eventsCh chan events.Event, chat *Chat) {
 	for event := range eventsCh {
 		log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
+
+		switch event.Kind {
+		case events.REGISTER_USER_EVENT:
+			// TODO: maybe add validations ???
+			payload := event.Payload.(map[string]any)
+			username := payload["Username"].(string)
+			registerUser(username, event.Meta.Conn, chat)
+		case events.SEND_MESSAGE_EVENT:
+			// broadcastMessage()
+		default:
+			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("invalid event kind %s", event.Kind))
+		}
 	}
 }
 
 type Chat struct {
 	mu    sync.Mutex
-	conns []net.TCPConn
+	conns map[string]*net.TCPConn
 }
 
-func NewChat() Chat {
-	return Chat{
-		conns: make([]net.TCPConn, 0),
+func NewChat() *Chat {
+	return &Chat{
+		conns: make(map[string]*net.TCPConn, 0),
 	}
 }
 
@@ -89,11 +113,12 @@ func main() {
 	args := readArgs(os.Args)
 	addr := NewAddr(args.Port)
 	listener := NewListener(addr)
+	chat := NewChat()
 	eventsCh := make(chan events.Event)
 	end := make(chan bool)
 
 	go receiveConnections(listener, eventsCh)
-	go handleEvents(eventsCh)
+	go handleEvents(eventsCh, chat)
 
 	<-end
 }

@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"net"
 
 	"github.com/alfredoprograma/tchat/internal/log"
 )
@@ -13,20 +14,25 @@ const (
 	SEND_MESSAGE_EVENT  = "SEND_MESSAGE_EVENT"
 )
 
+type EventMetadata struct {
+	Conn *net.TCPConn
+}
+
 type Event struct {
+	Meta    EventMetadata
 	Kind    EventKind
 	Payload any
 }
 
 type RegisterUserPayload struct {
-	username string
+	Username string
 }
 
 func NewRegisterUserEvent(username string) Event {
 	return Event{
 		Kind: REGISTER_USER_EVENT,
 		Payload: RegisterUserPayload{
-			username: username,
+			Username: username,
 		},
 	}
 }
