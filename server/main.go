@@ -74,10 +74,30 @@ func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 
 func registerUser(username string, conn *net.TCPConn, chat *Chat) {
 	chat.mu.Lock()
-	chat.conns[username] = conn
+	chat.conns[conn.RemoteAddr().String()] = User{
+		username: username,
+		conn:     conn,
+	}
 	chat.mu.Unlock()
 
 	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("user %s registered in chat room", username))
+}
+
+func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
+	chat.mu.Lock()
+	for addr, user := range chat.conns {
+		buf := fmt.Sprintf("[%s]: %s", user.username, message)
+		log.Log(log.LOG_LEVEL_INFO, buf)
+
+		// Omit broadcast message to emitter
+		if addr == emitter.RemoteAddr().String() {
+			continue
+		}
+
+		user.conn.Write([]byte(buf))
+	}
+
+	chat.mu.Unlock()
 }
 
 func handleEvents(eventsCh chan events.Event, chat *Chat) {
@@ -91,21 +111,28 @@ func handleEvents(eventsCh chan events.Event, chat *Chat) {
 			username := payload["Username"].(string)
 			registerUser(username, event.Meta.Conn, chat)
 		case events.SEND_MESSAGE_EVENT:
-			// broadcastMessage()
+			payload := event.Payload.(map[string]any)
+			message := payload["Content"].(string)
+			broadcast(message, event.Meta.Conn, chat)
 		default:
 			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("invalid event kind %s", event.Kind))
 		}
 	}
 }
 
+type User struct {
+	username string
+	conn     *net.TCPConn
+}
+
 type Chat struct {
 	mu    sync.Mutex
-	conns map[string]*net.TCPConn
+	conns map[string]User
 }
 
 func NewChat() *Chat {
 	return &Chat{
-		conns: make(map[string]*net.TCPConn, 0),
+		conns: make(map[string]User, 0),
 	}
 }
 

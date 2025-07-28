@@ -38,14 +38,14 @@ func NewRegisterUserEvent(username string) Event {
 }
 
 type SendMessagePayload struct {
-	content string
+	Content string
 }
 
 func NewSendMessageEvent(content string) Event {
 	return Event{
 		Kind: SEND_MESSAGE_EVENT,
 		Payload: SendMessagePayload{
-			content: content,
+			Content: content,
 		},
 	}
 }
