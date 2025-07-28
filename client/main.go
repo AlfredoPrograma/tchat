@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -10,44 +10,32 @@ import (
 	"github.com/alfredoprograma/tchat/internal/log"
 )
 
-func NewAddr(host net.IP, port int) *net.TCPAddr {
-	return &net.TCPAddr{
-		IP:   host,
-		Port: port,
-	}
-}
-
-func NewConn(addr *net.TCPAddr) *net.TCPConn {
-	conn, err := net.DialTCP("tcp", nil, addr)
+func NewConn(connSettings connSettings) *net.TCPConn {
+	conn, err := net.DialTCP("tcp", nil, connSettings.addr)
 
 	if err != nil {
-		log.Log(log.LOG_LEVEL_FATAL, fmt.Sprintf("cannot connect to host %s:%d", addr.IP, addr.Port))
+		log.Log(log.LOG_LEVEL_FATAL, fmt.Sprintf("cannot connect to host %s:%d", connSettings.addr.IP, connSettings.addr.Port))
+	}
+
+	event := events.NewRegisterUserEvent(connSettings.username)
+	serialized := events.Serialize(event)
+	_, err = conn.Write(serialized)
+
+	if err != nil {
+		log.Log(log.LOG_LEVEL_FATAL, fmt.Sprintf("cannot register with username %s", connSettings.username))
 	}
 
 	return conn
 }
 
 func main() {
-	args := readArgs(os.Args)
-	addr := NewAddr(args.Host, args.Port)
-	conn := NewConn(addr)
+	r := bufio.NewReader(os.Stdin)
+	w := bufio.NewWriter(os.Stdout)
+	rw := bufio.NewReadWriter(r, w)
+	settings := handleSettingsPrompt(rw)
+	conn := NewConn(settings)
+	end := make(chan bool)
 
-	myEvent := events.Event{
-		Kind: "REGISTER",
-		Payload: map[string]string{
-			"username": "alf2001",
-		},
-	}
-
-	buf, err := json.Marshal(myEvent)
-
-	if err != nil {
-		log.Log(log.LOG_LEVEL_FATAL, "cannot parse event")
-	}
-
-	_, err = conn.Write(buf)
-
-	if err != nil {
-		log.Log(log.LOG_LEVEL_FATAL, "cannot write to conn")
-	}
+	go handleMessagePrompt(rw, conn)
+	<-end
 }
