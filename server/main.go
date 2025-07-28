@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/alfredoprograma/tchat/internal/events"
 	"github.com/alfredoprograma/tchat/internal/log"
 )
 
@@ -29,7 +30,7 @@ func NewListener(addr *net.TCPAddr) *net.TCPListener {
 	return listener
 }
 
-func receiveConnections(listener *net.TCPListener, eventsCh chan Event) {
+func receiveConnections(listener *net.TCPListener, eventsCh chan events.Event) {
 	for {
 		conn, err := listener.AcceptTCP()
 
@@ -42,19 +43,23 @@ func receiveConnections(listener *net.TCPListener, eventsCh chan Event) {
 	}
 }
 
-func handleConnection(conn *net.TCPConn, eventsChan chan Event) {
+func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 	for {
-		buf := make([]byte, 0, BUFFER_SIZE)
-		_, err := conn.Read(buf)
+		buf := make([]byte, BUFFER_SIZE)
+		readLen, err := conn.Read(buf)
 
 		if err != nil {
 			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
 			continue
 		}
 
-		var incomingEvent Event
+		if readLen == 0 {
+			continue
+		}
 
-		if err := json.Unmarshal(buf, &incomingEvent); err != nil {
+		var incomingEvent events.Event
+
+		if err := json.Unmarshal(buf[:readLen], &incomingEvent); err != nil {
 			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot parse json message from connection %s", conn.RemoteAddr().String()))
 			continue
 		}
@@ -63,7 +68,7 @@ func handleConnection(conn *net.TCPConn, eventsChan chan Event) {
 	}
 }
 
-func handleEvents(eventsCh chan Event) {
+func handleEvents(eventsCh chan events.Event) {
 	for event := range eventsCh {
 		log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
 	}
@@ -84,7 +89,7 @@ func main() {
 	args := readArgs(os.Args)
 	addr := NewAddr(args.Port)
 	listener := NewListener(addr)
-	eventsCh := make(chan Event)
+	eventsCh := make(chan events.Event)
 	end := make(chan bool)
 
 	go receiveConnections(listener, eventsCh)
