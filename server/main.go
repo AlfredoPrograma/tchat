@@ -11,8 +11,6 @@ import (
 	"github.com/alfredoprograma/tchat/internal/log"
 )
 
-const BUFFER_SIZE = 512
-
 func NewAddr(port int) *net.TCPAddr {
 	return &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
@@ -45,7 +43,7 @@ func receiveConnections(listener *net.TCPListener, eventsCh chan events.Event) {
 
 func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 	for {
-		buf := make([]byte, BUFFER_SIZE)
+		buf := make([]byte, events.BUFFER_SIZE)
 		readLen, err := conn.Read(buf)
 
 		if err != nil {
@@ -85,8 +83,10 @@ func registerUser(username string, conn *net.TCPConn, chat *Chat) {
 
 func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
 	chat.mu.Lock()
+	emitterUsername := chat.conns[emitter.RemoteAddr().String()].username
+
 	for addr, user := range chat.conns {
-		buf := fmt.Sprintf("[%s]: %s", user.username, message)
+		buf := fmt.Sprintf("[%s]: %s", emitterUsername, message)
 		log.Log(log.LOG_LEVEL_INFO, buf)
 
 		// Omit broadcast message to emitter

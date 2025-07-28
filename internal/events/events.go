@@ -7,6 +7,8 @@ import (
 	"github.com/alfredoprograma/tchat/internal/log"
 )
 
+const BUFFER_SIZE = 512
+
 type EventKind string
 
 const (

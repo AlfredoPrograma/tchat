@@ -84,8 +84,6 @@ func handleSettingsPrompt(rw *bufio.ReadWriter) connSettings {
 
 func handleMessagePrompt(rw *bufio.ReadWriter, conn *net.TCPConn) {
 	for {
-		rw.WriteString("> ")
-		rw.Flush()
 		input, _ := rw.ReadString('\n')
 
 		event := events.NewSendMessageEvent(input)

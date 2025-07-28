@@ -28,6 +28,24 @@ func NewConn(connSettings connSettings) *net.TCPConn {
 	return conn
 }
 
+func receiveMessages(rw *bufio.ReadWriter, conn *net.TCPConn) {
+	for {
+		buf := make([]byte, events.BUFFER_SIZE)
+		readLen, err := conn.Read(buf)
+
+		if err != nil {
+			continue
+		}
+
+		if readLen == 0 {
+			continue
+		}
+
+		rw.Write(buf[:readLen])
+		rw.Flush()
+	}
+}
+
 func main() {
 	r := bufio.NewReader(os.Stdin)
 	w := bufio.NewWriter(os.Stdout)
@@ -37,5 +55,6 @@ func main() {
 	end := make(chan bool)
 
 	go handleMessagePrompt(rw, conn)
+	go receiveMessages(rw, conn)
 	<-end
 }
