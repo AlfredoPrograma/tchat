@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -28,7 +27,7 @@ func NewListener(addr *net.TCPAddr) *net.TCPListener {
 	return listener
 }
 
-func receiveConnections(listener *net.TCPListener, eventsCh chan events.Event) {
+func receiveConnections(eventsCh chan events.Event, listener *net.TCPListener) {
 	for {
 		conn, err := listener.AcceptTCP()
 
@@ -55,13 +54,7 @@ func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
 			continue
 		}
 
-		var incomingEvent events.Event
-
-		if err := json.Unmarshal(buf[:readLen], &incomingEvent); err != nil {
-			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot parse json message from connection %s", conn.RemoteAddr().String()))
-			continue
-		}
-
+		incomingEvent := events.Deserialize(buf[:readLen])
 		incomingEvent.Meta = events.EventMetadata{
 			Conn: conn,
 		}
@@ -106,14 +99,11 @@ func handleEvents(eventsCh chan events.Event, chat *Chat) {
 
 		switch event.Kind {
 		case events.REGISTER_USER_EVENT:
-			// TODO: maybe add validations ???
-			payload := event.Payload.(map[string]any)
-			username := payload["Username"].(string)
-			registerUser(username, event.Meta.Conn, chat)
+			payload := event.Payload.(events.RegisterUserPayload)
+			registerUser(payload.Username, event.Meta.Conn, chat)
 		case events.SEND_MESSAGE_EVENT:
-			payload := event.Payload.(map[string]any)
-			message := payload["Content"].(string)
-			broadcast(message, event.Meta.Conn, chat)
+			payload := event.Payload.(events.SendMessagePayload)
+			broadcast(payload.Content, event.Meta.Conn, chat)
 		default:
 			log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("invalid event kind %s", event.Kind))
 		}
@@ -144,7 +134,7 @@ func main() {
 	eventsCh := make(chan events.Event)
 	end := make(chan bool)
 
-	go receiveConnections(listener, eventsCh)
+	go receiveConnections(eventsCh, listener)
 	go handleEvents(eventsCh, chat)
 
 	<-end
