@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 
 	"github.com/alfredoprograma/tchat/internal/events"
 	"github.com/alfredoprograma/tchat/internal/log"
@@ -28,6 +27,7 @@ func NewListener(addr *net.TCPAddr) *net.TCPListener {
 }
 
 func receiveConnections(eventsCh chan events.Event, listener *net.TCPListener) {
+	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("started to accept TCP connections at %s", listener.Addr().String()))
 	for {
 		conn, err := listener.AcceptTCP()
 
@@ -77,11 +77,10 @@ func registerUser(username string, conn *net.TCPConn, chat *Chat) {
 func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
 	chat.mu.Lock()
 	emitterUsername := chat.conns[emitter.RemoteAddr().String()].username
+	buf := fmt.Sprintf("[%s]: %s", emitterUsername, message)
+	log.Log(log.LOG_LEVEL_INFO, buf)
 
 	for addr, user := range chat.conns {
-		buf := fmt.Sprintf("[%s]: %s", emitterUsername, message)
-		log.Log(log.LOG_LEVEL_INFO, buf)
-
 		// Omit broadcast message to emitter
 		if addr == emitter.RemoteAddr().String() {
 			continue
@@ -96,7 +95,6 @@ func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
 func handleEvents(eventsCh chan events.Event, chat *Chat) {
 	for event := range eventsCh {
 		log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
-
 		switch event.Kind {
 		case events.REGISTER_USER_EVENT:
 			payload := event.Payload.(events.RegisterUserPayload)
@@ -110,29 +108,13 @@ func handleEvents(eventsCh chan events.Event, chat *Chat) {
 	}
 }
 
-type User struct {
-	username string
-	conn     *net.TCPConn
-}
-
-type Chat struct {
-	mu    sync.Mutex
-	conns map[string]User
-}
-
-func NewChat() *Chat {
-	return &Chat{
-		conns: make(map[string]User, 0),
-	}
-}
-
 func main() {
 	args := readArgs(os.Args)
 	addr := NewAddr(args.Port)
 	listener := NewListener(addr)
-	chat := NewChat()
 	eventsCh := make(chan events.Event)
 	end := make(chan bool)
+	chat := NewChat()
 
 	go receiveConnections(eventsCh, listener)
 	go handleEvents(eventsCh, chat)
