@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 
@@ -26,7 +28,7 @@ func NewListener(addr *net.TCPAddr) *net.TCPListener {
 	return listener
 }
 
-func receiveConnections(eventsCh chan events.Event, listener *net.TCPListener) {
+func receiveConnections(eventsCh chan events.Event, chat *Chat, listener *net.TCPListener) {
 	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("started to accept TCP connections at %s", listener.Addr().String()))
 	for {
 		conn, err := listener.AcceptTCP()
@@ -36,17 +38,21 @@ func receiveConnections(eventsCh chan events.Event, listener *net.TCPListener) {
 			continue
 		}
 
-		go handleConnection(conn, eventsCh)
+		go handleConnection(conn, chat, eventsCh)
 	}
 }
 
-func handleConnection(conn *net.TCPConn, eventsChan chan events.Event) {
+func handleConnection(conn *net.TCPConn, chat *Chat, eventsChan chan events.Event) {
 	for {
 		buf := make([]byte, events.BUFFER_SIZE)
 		readLen, err := conn.Read(buf)
 
 		if err != nil {
-			// log.Log(log.LOG_LEVEL_ERROR, fmt.Sprintf("cannot read from connection %s", conn.RemoteAddr().String()))
+			if errors.Is(err, io.EOF) {
+				removeUser(conn, chat)
+				break
+			}
+
 			continue
 		}
 
@@ -74,6 +80,14 @@ func registerUser(username string, conn *net.TCPConn, chat *Chat) {
 	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("user %s registered in chat room", username))
 }
 
+func removeUser(conn *net.TCPConn, chat *Chat) {
+	chat.mu.Lock()
+	username := chat.conns[conn.RemoteAddr().String()].username
+	delete(chat.conns, conn.RemoteAddr().String())
+	log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("user %s left from chat room", username))
+	chat.mu.Unlock()
+}
+
 func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
 	chat.mu.Lock()
 	emitterUsername := chat.conns[emitter.RemoteAddr().String()].username
@@ -94,7 +108,6 @@ func broadcast(message string, emitter *net.TCPConn, chat *Chat) {
 
 func handleEvents(eventsCh chan events.Event, chat *Chat) {
 	for event := range eventsCh {
-		log.Log(log.LOG_LEVEL_INFO, fmt.Sprintf("handling %s event", event.Kind))
 		switch event.Kind {
 		case events.REGISTER_USER_EVENT:
 			payload := event.Payload.(events.RegisterUserPayload)
@@ -116,7 +129,7 @@ func main() {
 	end := make(chan bool)
 	chat := NewChat()
 
-	go receiveConnections(eventsCh, listener)
+	go receiveConnections(eventsCh, chat, listener)
 	go handleEvents(eventsCh, chat)
 
 	<-end
